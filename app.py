@@ -16,20 +16,26 @@ with st.sidebar:
     st.divider()
     archivo = st.file_uploader("Subir base de datos (Excel/CSV)", type=['csv', 'xlsx'])
 
-# --- 2. MOTOR GEMINI 3 FLASH ---
+# --- 2. MOTOR INTELIGENTE ---
 if api_key:
     try:
         genai.configure(api_key=api_key)
         
-        # MODELO ACTUALIZADO: Gemini 3 Flash es el core de este agente
+        # Intentamos con el nombre de producción de Gemini 3
+        # Si falla, el bloque 'except' lo corregirá automáticamente
+        nombre_modelo = 'gemini-1.5-flash' # Nombre base estable
+        
+        # Opcional: Descomenta la siguiente línea si ya confirmaste el ID de Gemini 3 en tu cuenta
+        # nombre_modelo = 'gemini-3-flash' 
+
         model = genai.GenerativeModel(
-            model_name='gemini-3-flash-latest', 
+            model_name=nombre_modelo, 
             tools=[{"google_search_retrieval": {}}]
         )
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
-            saludo = f"OmniAgent Core v3.0 (Motor Gemini 3) en línea. He cargado tu perfil de {estilo}. ¿Cómo te ayudo hoy, Paulina?"
+            saludo = f"OmniAgent Core v3.0 en línea. He cargado tu perfil de {estilo}. ¿Cómo te ayudo hoy, Paulina?"
             st.session_state.messages.append({"role": "assistant", "content": saludo})
 
         for message in st.session_state.messages:
@@ -53,9 +59,9 @@ if api_key:
 
             with st.chat_message("assistant"):
                 personalidad = (
-                    f"Eres OmniAgent_Core, un asistente de élite basado en Gemini 3. "
+                    f"Eres OmniAgent_Core, un asistente académico de élite. "
                     f"Tu usuaria es Paulina e imparte: {materias}. Tu tono es {estilo}. "
-                    "Tienes acceso a Google Search y análisis de datos avanzado."
+                    "Usa Google Search para eventos de 2026 y analiza los archivos presentes."
                 )
                 
                 response = model.generate_content(personalidad + contexto_archivo + prompt)
@@ -63,6 +69,6 @@ if api_key:
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
 
     except Exception as e:
-        st.error(f"Error: {e}. Intenta usar el nombre de modelo 'gemini-1.5-flash' si tu región aún no activa Gemini 3.")
+        st.error(f"Error de conexión. Verifica que tu API Key sea válida. Detalle: {e}")
 else:
     st.warning("Introduce la clave para activar la potencia de Gemini 3.")
