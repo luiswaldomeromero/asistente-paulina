@@ -5,35 +5,27 @@ import smtplib
 from email.mime.text import MIMEText
 from pptx import Presentation
 from io import BytesIO
+import re
 
-# --- 1. CONFIGURACIÓN DE LA INTERFAZ ---
-st.set_page_config(page_title="OmniAgent Core v4.1 (OpenAI Edition)", page_icon="🤖", layout="wide")
+# --- 1. CONFIGURACIÓN ---
+st.set_page_config(page_title="OmniAgent Pro - OpenAI", page_icon="🚀", layout="wide")
 
 with st.sidebar:
-    st.title("🚀 Sistema OmniAgent Pro")
-    # Ahora pedimos la clave de OpenAI
+    st.title("🚀 OmniAgent Pro")
     api_key = st.text_input("OpenAI API Key:", type="password")
     
     st.divider()
     st.markdown("### 📧 Módulo de Ejecución")
-    email_user = st.text_input("Tu Gmail:")
-    email_pass = st.text_input("Contraseña de Aplicación (16 letras):", type="password")
+    email_user = st.text_input("Tu Gmail:", value="luisfloresrios666@gmail.com")
+    # Pega aquí tus 16 letras de nuevo
+    email_pass = st.text_input("Contraseña de Aplicación:", type="password")
     
     st.divider()
-    st.markdown("### 👤 Perfil del Agente")
-    nivel = st.selectbox(
-        "Nivel Educativo / Nicho", 
-        ["Primaria", "Secundaria", "Preparatoria", "Universidad", "Legal", "RRHH"]
-    )
-    materias = st.text_area("Materias o contexto:", placeholder="Ej: Psicología, Historia...")
-    
-    st.divider()
-    archivo = st.file_uploader("Cargar Material (Excel/CSV/PDF)", type=['csv', 'xlsx', 'pdf', 'txt'])
+    nivel = st.selectbox("Nivel Educativo", ["Primaria", "Secundaria", "Universidad", "Empresarial"])
+    archivo = st.file_uploader("Cargar Material", type=['csv', 'xlsx', 'pdf', 'txt'])
 
-# --- 2. FUNCIONES DE HERRAMIENTAS ---
-
+# --- 2. MOTOR DE CORREO ---
 def enviar_email(destinatario, asunto, cuerpo):
-    """Envía correos electrónicos automatizados"""
     try:
         msg = MIMEText(cuerpo)
         msg['Subject'] = asunto
@@ -44,81 +36,53 @@ def enviar_email(destinatario, asunto, cuerpo):
             server.send_message(msg)
         return True
     except Exception as e:
-        st.error(f"Error de envío: {e}")
+        st.error(f"Error técnico: {e}")
         return False
 
-def crear_pptx(contenido):
-    """Genera un archivo PowerPoint real"""
-    prs = Presentation()
-    lineas = contenido.split('\n')
-    current_slide = None
-    for linea in lineas:
-        if "Diapositiva" in linea or "Slide" in linea:
-            current_slide = prs.slides.add_slide(prs.slide_layouts[1])
-            current_slide.shapes.title.text = linea
-        elif linea.strip() and current_slide:
-            try:
-                p = current_slide.placeholders[1].text_frame.add_paragraph()
-                p.text = linea
-            except: pass
-    buf = BytesIO()
-    prs.save(buf)
-    return buf.getvalue()
-
-# --- 3. LÓGICA DEL AGENTE CON OPENAI ---
+# --- 3. LÓGICA DEL AGENTE ---
 if api_key:
-    try:
-        # Inicializamos el cliente de OpenAI
-        client = OpenAI(api_key=api_key)
-        
-        if "messages" not in st.session_state:
-            st.session_state.messages = [
-                {"role": "assistant", "content": f"OmniAgent v4.1 (OpenAI) activo para **{nivel}**. ¿En qué trabajamos hoy?"}
-            ]
+    client = OpenAI(api_key=api_key)
+    
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": f"OmniAgent v4.2 listo. Soy tu operario para nivel {nivel}. ¿A quién le enviamos un correo o qué presentación hacemos?"}]
 
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-        if prompt := st.chat_input("Escribe tu instrucción aquí..."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+    if prompt := st.chat_input("Ej: Redacta un examen y envíalo a ventas@ejemplo.com"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-            with st.chat_message("assistant"):
-                sistema = (
-                    f"Eres OmniAgent_Core, un asistente de élite nivel {nivel}. "
-                    f"Contexto: {materias}. "
-                    "Si generas una presentación, usa siempre el formato 'Diapositiva X: Título'."
-                )
-                
-                # Usamos GPT-4o-mini que es el equivalente al 'Nano' por velocidad y costo
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": sistema},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                
-                texto_respuesta = response.choices[0].message.content
-                st.markdown(texto_respuesta)
-                st.session_state.messages.append({"role": "assistant", "content": texto_respuesta})
+        with st.chat_message("assistant"):
+            # INSTRUCCIÓN REFORZADA: Le prohibimos decir que no puede
+            sistema = (
+                f"Eres un Agente Operativo nivel {nivel}. TIENES la capacidad de enviar correos y crear archivos. "
+                "Tu respuesta será el CONTENIDO del correo o la presentación. "
+                "Actúa como un asistente ejecutivo eficiente."
+            )
+            
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": sistema}, {"role": "user", "content": prompt}]
+            )
+            
+            respuesta = response.choices[0].message.content
+            st.markdown(respuesta)
+            st.session_state.messages.append({"role": "assistant", "content": respuesta})
 
-                # --- ACCIONES ---
-                col1, col2 = st.columns(2)
-                
-                if "@" in prompt and email_user and email_pass:
-                    dest = [w for w in prompt.split() if "@" in w][0]
-                    if col1.button(f"📧 Enviar a {dest}"):
-                        if enviar_email(dest, f"Reporte OmniAgent - {nivel}", texto_respuesta):
-                            st.success("✅ Enviado.")
-                
-                if "diapositiva" in texto_respuesta.lower() or "presentación" in prompt.lower():
-                    pptx_data = crear_pptx(texto_respuesta)
-                    col2.download_button("📥 Descargar PowerPoint", data=pptx_data, file_name="presentacion.pptx")
+            # BUSCADOR AUTOMÁTICO DE CORREOS EN EL TEXTO
+            emails_encontrados = re.findall(r'[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+', prompt.lower())
+            
+            if emails_encontrados and email_pass:
+                dest = emails_encontrados[0]
+                if st.button(f"📧 Confirmar envío a {dest}"):
+                    with st.spinner("Enviando..."):
+                        if enviar_email(dest, f"Envío OmniAgent - {nivel}", respuesta):
+                            st.success(f"✅ ¡Correo enviado a {dest}!")
+            elif "@" in prompt and not email_pass:
+                st.warning("Falta tu 'Contraseña de Aplicación' en la izquierda para enviar.")
 
-    except Exception as e:
-        st.error(f"Error de OpenAI: {e}")
 else:
-    st.warning("⚠️ Introduce tu OpenAI API Key.")
+    st.warning("⚠️ Introduce tu OpenAI API Key para activar el sistema.")
