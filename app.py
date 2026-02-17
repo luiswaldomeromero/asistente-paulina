@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 import pandas as pd
 
 # --- 1. CONFIGURACIÓN ---
@@ -12,63 +12,49 @@ with st.sidebar:
     st.markdown("### 📝 Perfil de la Maestra")
     materias = st.text_area("¿Qué materias impartes?", placeholder="Ej: Psicología, Historia...")
     estilo = st.selectbox("Tono del Asistente", ["Muy Formal", "Colega/Amigable", "Creativo", "Ejecutivo"])
-    
-    st.divider()
     archivo = st.file_uploader("Subir base de datos (Excel/CSV)", type=['csv', 'xlsx'])
 
-# --- 2. MOTOR INTELIGENTE ---
+# --- 2. MOTOR GEMINI 3 FLASH ---
 if api_key:
     try:
-        genai.configure(api_key=api_key)
+        # Nueva forma de inicializar el cliente según tu documentación
+        client = genai.Client(api_key=api_key)
         
-        # Intentamos con el nombre de producción de Gemini 3
-        # Si falla, el bloque 'except' lo corregirá automáticamente
-        nombre_modelo = 'gemini-1.5-flash' # Nombre base estable
-        
-        # Opcional: Descomenta la siguiente línea si ya confirmaste el ID de Gemini 3 en tu cuenta
-        # nombre_modelo = 'gemini-3-flash' 
-
-        model = genai.GenerativeModel(
-            model_name=nombre_modelo, 
-            tools=[{"google_search_retrieval": {}}]
-        )
-
         if "messages" not in st.session_state:
             st.session_state.messages = []
-            saludo = f"OmniAgent Core v3.0 en línea. He cargado tu perfil de {estilo}. ¿Cómo te ayudo hoy, Paulina?"
+            saludo = f"OmniAgent Core v3.0 (Gemini 3) activo. Perfil: {estilo}. ¿En qué avanzamos, Paulina?"
             st.session_state.messages.append({"role": "assistant", "content": saludo})
 
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        # --- 3. PROCESAMIENTO ---
-        if prompt := st.chat_input("Escribe tu instrucción aquí..."):
+        # --- 3. INTERACCIÓN ---
+        if prompt := st.chat_input("Escribe tu instrucción..."):
             
-            contexto_archivo = ""
+            contexto_datos = ""
             if archivo:
-                try:
-                    df = pd.read_excel(archivo) if archivo.name.endswith('xlsx') else pd.read_csv(archivo)
-                    contexto_archivo = f"\n[DATOS DEL ARCHIVO]:\n{df.head(50).to_string(index=False)}\n"
-                except:
-                    st.error("Error al leer el archivo.")
+                df = pd.read_excel(archivo) if archivo.name.endswith('xlsx') else pd.read_csv(archivo)
+                contexto_datos = f"\n[DATOS CARGADOS]:\n{df.head(20).to_string(index=False)}\n"
 
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                personalidad = (
-                    f"Eres OmniAgent_Core, un asistente académico de élite. "
-                    f"Tu usuaria es Paulina e imparte: {materias}. Tu tono es {estilo}. "
-                    "Usa Google Search para eventos de 2026 y analiza los archivos presentes."
+                # Instrucción de sistema
+                config_sistema = f"Eres OmniAgent_Core, asistente de Paulina ({materias}). Tono: {estilo}. Usa búsqueda web si es necesario."
+                
+                # Llamada al modelo Gemini 3 Flash
+                response = client.models.generate_content(
+                    model="gemini-3-flash-preview", 
+                    contents=config_sistema + contexto_datos + prompt
                 )
                 
-                response = model.generate_content(personalidad + contexto_archivo + prompt)
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
 
     except Exception as e:
-        st.error(f"Error de conexión. Verifica que tu API Key sea válida. Detalle: {e}")
+        st.error(f"Error: {e}. Asegúrate de haber actualizado el archivo requirements.txt primero.")
 else:
-    st.warning("Introduce la clave para activar la potencia de Gemini 3.")
+    st.warning("Introduce tu clave para activar Gemini 3.")
