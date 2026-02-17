@@ -1,5 +1,5 @@
 import streamlit as st
-from google import genai
+from openai import OpenAI
 import pandas as pd
 import smtplib
 from email.mime.text import MIMEText
@@ -7,11 +7,12 @@ from pptx import Presentation
 from io import BytesIO
 
 # --- 1. CONFIGURACIÓN DE LA INTERFAZ ---
-st.set_page_config(page_title="OmniAgent Core v4.0", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="OmniAgent Core v4.1 (OpenAI Edition)", page_icon="🤖", layout="wide")
 
 with st.sidebar:
-    st.title("🛡️ Sistema Gemini 3 Ultra")
-    api_key = st.text_input("API Key de Google:", type="password")
+    st.title("🚀 Sistema OmniAgent Pro")
+    # Ahora pedimos la clave de OpenAI
+    api_key = st.text_input("OpenAI API Key:", type="password")
     
     st.divider()
     st.markdown("### 📧 Módulo de Ejecución")
@@ -24,16 +25,15 @@ with st.sidebar:
         "Nivel Educativo / Nicho", 
         ["Primaria", "Secundaria", "Preparatoria", "Universidad", "Legal", "RRHH"]
     )
-    materias = st.text_area("Materias o contexto:", placeholder="Ej: Psicología, Historia, Matemáticas...")
-    estilo = st.selectbox("Tono", ["Muy Formal", "Colega/Amigable", "Creativo", "Ejecutivo"])
+    materias = st.text_area("Materias o contexto:", placeholder="Ej: Psicología, Historia...")
     
     st.divider()
-    archivo = st.file_uploader("Cargar Base de Datos o Material", type=['csv', 'xlsx', 'pdf', 'txt'])
+    archivo = st.file_uploader("Cargar Material (Excel/CSV/PDF)", type=['csv', 'xlsx', 'pdf', 'txt'])
 
-# --- 2. FUNCIONES DE HERRAMIENTAS (TOOLS) ---
+# --- 2. FUNCIONES DE HERRAMIENTAS ---
 
 def enviar_email(destinatario, asunto, cuerpo):
-    """Envía correos electrónicos de forma automatizada"""
+    """Envía correos electrónicos automatizados"""
     try:
         msg = MIMEText(cuerpo)
         msg['Subject'] = asunto
@@ -48,7 +48,7 @@ def enviar_email(destinatario, asunto, cuerpo):
         return False
 
 def crear_pptx(contenido):
-    """Genera un archivo PowerPoint real para descarga"""
+    """Genera un archivo PowerPoint real"""
     prs = Presentation()
     lineas = contenido.split('\n')
     current_slide = None
@@ -65,78 +65,60 @@ def crear_pptx(contenido):
     prs.save(buf)
     return buf.getvalue()
 
-# --- 3. LÓGICA DEL AGENTE INTELIGENTE ---
+# --- 3. LÓGICA DEL AGENTE CON OPENAI ---
 if api_key:
     try:
-        # Usamos el cliente moderno de Gemini
-        client = genai.Client(api_key=api_key)
+        # Inicializamos el cliente de OpenAI
+        client = OpenAI(api_key=api_key)
         
-        # Selección automática del modelo para evitar Error 503
-        # Nota: Usamos gemini-1.5-flash como base de alta disponibilidad en 2026
-        model_id = "gemini-1.5-flash" 
-
         if "messages" not in st.session_state:
             st.session_state.messages = [
-                {"role": "assistant", "content": f"OmniAgent v4.0 activo para **{nivel}**. Puedo navegar, enviar correos, agendar y crear archivos. ¿Cuál es la misión, Paulina?"}
+                {"role": "assistant", "content": f"OmniAgent v4.1 (OpenAI) activo para **{nivel}**. ¿En qué trabajamos hoy?"}
             ]
 
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        if prompt := st.chat_input("Ej: Crea una presentación sobre la fotosíntesis y envíala a mi correo"):
+        if prompt := st.chat_input("Escribe tu instrucción aquí..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                contexto_archivo = ""
-                if archivo:
-                    contexto_archivo = "\n[ARCHIVO CARGADO DETECTADO]\n"
-
-                # Instrucciones de sistema integradas
                 sistema = (
-                    f"Eres OmniAgent_Core, un agente autónomo nivel {nivel}. "
-                    f"Contexto: {materias}. Tono: {estilo}. "
-                    "Usa Google Search para datos del 2026. "
-                    "Si generas una presentación, usa el formato 'Diapositiva X: Título'."
+                    f"Eres OmniAgent_Core, un asistente de élite nivel {nivel}. "
+                    f"Contexto: {materias}. "
+                    "Si generas una presentación, usa siempre el formato 'Diapositiva X: Título'."
                 )
                 
-                # Ejecución con búsqueda web
-                try:
-                    response = client.models.generate_content(
-                        model=model_id, 
-                        contents=sistema + contexto_archivo + prompt
-                    )
-                    
-                    st.markdown(response.text)
-                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                # Usamos GPT-4o-mini que es el equivalente al 'Nano' por velocidad y costo
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": sistema},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                
+                texto_respuesta = response.choices[0].message.content
+                st.markdown(texto_respuesta)
+                st.session_state.messages.append({"role": "assistant", "content": texto_respuesta})
 
-                    # --- ACCIONES DINÁMICAS ---
-                    col1, col2 = st.columns(2)
-                    
-                    # 1. Detección de envío de correo
-                    if "@" in prompt and email_user and email_pass:
-                        # Extraer email
-                        palabras = prompt.split()
-                        dest = [w for w in palabras if "@" in w][0]
-                        if col1.button(f"📧 Enviar ahora a {dest}"):
-                            if enviar_email(dest, f"Reporte OmniAgent - {nivel}", response.text):
-                                st.success("✅ Correo enviado con éxito.")
-                    
-                    # 2. Detección de Presentación
-                    if "diapositiva" in response.text.lower() or "presentación" in prompt.lower():
-                        pptx_data = crear_pptx(response.text)
-                        col2.download_button(
-                            label="📥 Descargar PowerPoint",
-                            data=pptx_data,
-                            file_name="presentacion_omniagent.pptx",
-                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                        )
-                except Exception as e:
-                    st.info("Servidores de Google en mantenimiento o saturados. Reintentando en 30s...")
+                # --- ACCIONES ---
+                col1, col2 = st.columns(2)
+                
+                if "@" in prompt and email_user and email_pass:
+                    dest = [w for w in prompt.split() if "@" in w][0]
+                    if col1.button(f"📧 Enviar a {dest}"):
+                        if enviar_email(dest, f"Reporte OmniAgent - {nivel}", texto_respuesta):
+                            st.success("✅ Enviado.")
+                
+                if "diapositiva" in texto_respuesta.lower() or "presentación" in prompt.lower():
+                    pptx_data = crear_pptx(texto_respuesta)
+                    col2.download_button("📥 Descargar PowerPoint", data=pptx_data, file_name="presentacion.pptx")
 
     except Exception as e:
-        st.error(f"Error de conexión: {e}")
+        st.error(f"Error de OpenAI: {e}")
 else:
-    st.warning("⚠️ Introduce tu API Key en la barra lateral para comenzar.")
+    st.warning("⚠️ Introduce tu OpenAI API Key.")
