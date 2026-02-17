@@ -10,7 +10,6 @@ with st.sidebar:
     api_key = st.text_input("API Key de Google:", type="password")
     st.divider()
     st.markdown("### 📝 Perfil de la Maestra")
-    # Memoria de largo plazo manual (se guarda mientras la pestaña esté abierta)
     materias = st.text_area("¿Qué materias impartes?", placeholder="Ej: Psicología, Historia...")
     estilo = st.selectbox("Tono del Asistente", ["Muy Formal", "Colega/Amigable", "Creativo", "Ejecutivo"])
     
@@ -21,15 +20,16 @@ with st.sidebar:
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        # Actualizado al modelo de última generación
+        
+        # MODELO ACTUALIZADO: Gemini 3 Flash es el core de este agente
         model = genai.GenerativeModel(
-            model_name='gemini-3-flash',
+            model_name='gemini-3-flash-latest', 
             tools=[{"google_search_retrieval": {}}]
         )
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
-            saludo = f"OmniAgent Core v3.0 en línea. Saludos, Paulina. He cargado tu perfil de {estilo}. ¿En qué avanzamos hoy?"
+            saludo = f"OmniAgent Core v3.0 (Motor Gemini 3) en línea. He cargado tu perfil de {estilo}. ¿Cómo te ayudo hoy, Paulina?"
             st.session_state.messages.append({"role": "assistant", "content": saludo})
 
         for message in st.session_state.messages:
@@ -41,19 +41,21 @@ if api_key:
             
             contexto_archivo = ""
             if archivo:
-                df = pd.read_excel(archivo) if archivo.name.endswith('xlsx') else pd.read_csv(archivo)
-                contexto_archivo = f"\n[DATOS CARGADOS]:\n{df.head(30).to_string(index=False)}\n"
+                try:
+                    df = pd.read_excel(archivo) if archivo.name.endswith('xlsx') else pd.read_csv(archivo)
+                    contexto_archivo = f"\n[DATOS DEL ARCHIVO]:\n{df.head(50).to_string(index=False)}\n"
+                except:
+                    st.error("Error al leer el archivo.")
 
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                # Instrucciones de personalidad basadas en el perfil del Sidebar
                 personalidad = (
                     f"Eres OmniAgent_Core, un asistente de élite basado en Gemini 3. "
-                    f"Paulina imparte: {materias}. Tu tono debe ser {estilo}. "
-                    "Usa Google Search para datos del 2026 y analiza los archivos si están presentes."
+                    f"Tu usuaria es Paulina e imparte: {materias}. Tu tono es {estilo}. "
+                    "Tienes acceso a Google Search y análisis de datos avanzado."
                 )
                 
                 response = model.generate_content(personalidad + contexto_archivo + prompt)
@@ -61,6 +63,6 @@ if api_key:
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
 
     except Exception as e:
-        st.error(f"Error técnico: {e}. Asegúrate de que tu cuenta tenga acceso a Gemini 3.")
+        st.error(f"Error: {e}. Intenta usar el nombre de modelo 'gemini-1.5-flash' si tu región aún no activa Gemini 3.")
 else:
     st.warning("Introduce la clave para activar la potencia de Gemini 3.")
