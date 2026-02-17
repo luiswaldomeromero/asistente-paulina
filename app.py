@@ -1,51 +1,44 @@
 import streamlit as st
 import google.generativeai as genai
+import pandas as pd
 
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Asistente de Paulina", page_icon="🎓")
+st.set_page_config(page_title="OmniAgent Core Pro", page_icon="🚀")
 
-# --- BARRA LATERAL: CONFIGURACIÓN ---
 with st.sidebar:
-    st.title("⚙️ Configuración")
-    api_key = st.text_input("Introduce la API Key de Gemini:", type="password")
-    
+    st.title("⚙️ Panel de Control")
+    api_key = st.text_input("Introduce la API Key:", type="password")
     st.divider()
-    st.markdown("""
-    **Instrucciones para la Maestra:**
-    Como soy tu nuevo asistente, cuéntame sobre tus materias, 
-    el tono que prefieres para tus clases y cómo quieres que 
-    organice tus bases de datos.
-    """)
+    # NUEVA FUNCIÓN: Cargador de archivos
+    archivo_subido = st.file_uploader("Subir lista de alumnos o profesionistas (Excel/CSV)", type=['csv', 'xlsx'])
 
-# --- INICIALIZACIÓN DE GEMINI ---
 if api_key:
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
 
-    # --- MEMORIA DE LA CONVERSACIÓN ---
     if "messages" not in st.session_state:
-        st.session_state.messages = []
-        # Mensaje inicial de "Bienvenida como empleado"
-        bienvenida = "Hola Paulina, soy tu nuevo asistente académico. Estoy listo para integrarme a tu equipo. Cuéntame, ¿en qué materias te voy a ayudar y cómo te gusta que trabaje?"
-        st.session_state.messages.append({"role": "assistant", "content": bienvenida})
+        st.session_state.messages = [{"role": "assistant", "content": "¡Hola! Soy tu asistente Pro. Ahora puedo leer tus archivos de Excel. ¿Qué quieres que analicemos hoy?"}]
 
-    # Mostrar historial
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # --- LÓGICA DE INTERACCIÓN ---
-    if prompt := st.chat_input("Escribe aquí..."):
+    if prompt := st.chat_input("Ej: Analiza este Excel y dime quiénes están reprobados"):
+        # Si hay un archivo, le pasamos los datos al agente
+        contexto_archivo = ""
+        if archivo_subido:
+            df = pd.read_excel(archivo_subido) if archivo_subido.name.endswith('xlsx') else pd.read_csv(archivo_subido)
+            contexto_archivo = f"\n\nAquí tienes los datos del archivo que subí:\n{df.to_string(index=False)}"
+            st.info("📊 Archivo cargado correctamente")
+
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            # Contexto de "Nuevo Empleado"
-            sistema = "Eres el asistente personal de Paulina, una maestra universitaria. Tu tono es profesional, servicial y proactivo, como un empleado brillante en su primer día. Tu meta es aprender sus procesos para automatizar sus planeaciones, presentaciones y bases de datos."
-            
-            response = model.generate_content([sistema] + [m["content"] for m in st.session_state.messages])
+            sistema = "Eres OmniAgent_Core, un experto en gestión académica. Si el usuario sube datos, analízalos con precisión, crea tablas resumen y responde proactivamente."
+            # El agente recibe el texto del usuario + los datos del Excel
+            response = model.generate_content(sistema + contexto_archivo + prompt)
             st.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
 else:
-    st.warning("Por favor, introduce tu API Key en la barra lateral para comenzar.")
+    st.warning("Configura la API Key para activar las funciones Pro.")
