@@ -1,44 +1,92 @@
 import streamlit as st
 import google.generativeai as genai
 import pandas as pd
+from io import BytesIO
 
-st.set_page_config(page_title="OmniAgent Core Pro", page_icon="🚀")
+# --- 1. CONFIGURACIÓN DE LA INTERFAZ ---
+st.set_page_config(page_title="OmniAgent Core Pro", page_icon="🎓", layout="wide")
 
+# Estilo personalizado para que se vea como una herramienta profesional
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #4CAF50; color: white; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. BARRA LATERAL (CONFIGURACIÓN Y ARCHIVOS) ---
 with st.sidebar:
-    st.title("⚙️ Panel de Control")
-    api_key = st.text_input("Introduce la API Key:", type="password")
+    st.title("🚀 Panel de Control")
+    st.markdown("### Configuración del Agente")
+    api_key = st.text_input("Introduce tu Gemini API Key:", type="password")
+    
     st.divider()
-    # NUEVA FUNCIÓN: Cargador de archivos
-    archivo_subido = st.file_uploader("Subir lista de alumnos o profesionistas (Excel/CSV)", type=['csv', 'xlsx'])
+    st.markdown("### 📂 Carga de Datos")
+    archivo_subido = st.file_uploader("Sube Excel o CSV de alumnos/profesionistas", type=['csv', 'xlsx'])
+    
+    if archivo_subido:
+        st.success("Archivo listo para analizar")
 
+    st.divider()
+    st.info("Este agente tiene acceso a Google Search y puede crear planeaciones, guiones y analizar bases de datos.")
+
+# --- 3. LÓGICA DEL MOTOR (GEMINI 1.5 FLASH) ---
 if api_key:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    try:
+        genai.configure(api_key=api_key)
+        
+        # Configuramos el modelo con herramientas de búsqueda web
+        model = genai.GenerativeModel(
+            model_name='gemini-1.5-flash',
+            tools=[{"google_search_retrieval": {}}]
+        )
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": "¡Hola! Soy tu asistente Pro. Ahora puedo leer tus archivos de Excel. ¿Qué quieres que analicemos hoy?"}]
+        # Inicializar historial de chat con personalidad de "Nuevo Empleado"
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+            bienvenida = "Hola Paulina, soy OmniAgent_Core, tu nuevo asistente. He activado mis módulos de búsqueda web y análisis de datos. ¿Qué materia o base de datos vamos a trabajar hoy?"
+            st.session_state.messages.append({"role": "assistant", "content": bienvenida})
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        # Mostrar el chat
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-    if prompt := st.chat_input("Ej: Analiza este Excel y dime quiénes están reprobados"):
-        # Si hay un archivo, le pasamos los datos al agente
-        contexto_archivo = ""
-        if archivo_subido:
-            df = pd.read_excel(archivo_subido) if archivo_subido.name.endswith('xlsx') else pd.read_csv(archivo_subido)
-            contexto_archivo = f"\n\nAquí tienes los datos del archivo que subí:\n{df.to_string(index=False)}"
-            st.info("📊 Archivo cargado correctamente")
+        # --- 4. INTERACCIÓN Y EJECUCIÓN ---
+        if prompt := st.chat_input("Escribe una instrucción (ej: 'Busca tendencias de IA en 2026')"):
+            
+            # Preparar contexto si hay un archivo cargado
+            contexto_datos = ""
+            if archivo_subido:
+                try:
+                    df = pd.read_excel(archivo_subido) if archivo_subido.name.endswith('xlsx') else pd.read_csv(archivo_subido)
+                    contexto_datos = f"\n\nDATOS DEL ARCHIVO CARGADO:\n{df.to_string(index=False)}\n\n"
+                except Exception as e:
+                    st.error(f"Error al leer el archivo: {e}")
 
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+            # Guardar y mostrar mensaje del usuario
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        with st.chat_message("assistant"):
-            sistema = "Eres OmniAgent_Core, un experto en gestión académica. Si el usuario sube datos, analízalos con precisión, crea tablas resumen y responde proactivamente."
-            # El agente recibe el texto del usuario + los datos del Excel
-            response = model.generate_content(sistema + contexto_archivo + prompt)
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            # Generar respuesta del Asistente
+            with st.chat_message("assistant"):
+                instruccion_sistema = (
+                    "Eres OmniAgent_Core, un asistente académico de élite. "
+                    "Tu tono es de un empleado brillante, proactivo y servicial. "
+                    "Tienes permiso para usar Google Search si la información es reciente o externa. "
+                    "Si hay datos de un archivo, úsalos para responder con precisión."
+                )
+                
+                # Llamada al modelo
+                response = model.generate_content(instruccion_sistema + contexto_datos + prompt)
+                
+                # Mostrar respuesta y guardar
+                st.markdown(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+
+    except Exception as e:
+        st.error(f"Ocurrió un error con la API: {e}")
 else:
-    st.warning("Configura la API Key para activar las funciones Pro.")
+    st.warning("⚠️ Por favor, introduce tu API Key en la barra lateral para comenzar.")
+    st.image("https://images.unsplash.com/photo-1434030216411-0b793f4b4173?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80", caption="Listo para trabajar contigo.")
