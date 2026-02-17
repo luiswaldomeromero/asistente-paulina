@@ -1,92 +1,66 @@
 import streamlit as st
 import google.generativeai as genai
 import pandas as pd
-from io import BytesIO
 
-# --- 1. CONFIGURACIÓN DE LA INTERFAZ ---
-st.set_page_config(page_title="OmniAgent Core Pro", page_icon="🎓", layout="wide")
+# --- 1. CONFIGURACIÓN ---
+st.set_page_config(page_title="OmniAgent Core v3.0", page_icon="🧠", layout="wide")
 
-# Estilo personalizado para que se vea como una herramienta profesional
-st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #4CAF50; color: white; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- 2. BARRA LATERAL (CONFIGURACIÓN Y ARCHIVOS) ---
 with st.sidebar:
-    st.title("🚀 Panel de Control")
-    st.markdown("### Configuración del Agente")
-    api_key = st.text_input("Introduce tu Gemini API Key:", type="password")
+    st.title("🛡️ Sistema Gemini 3")
+    api_key = st.text_input("API Key de Google:", type="password")
+    st.divider()
+    st.markdown("### 📝 Perfil de la Maestra")
+    # Memoria de largo plazo manual (se guarda mientras la pestaña esté abierta)
+    materias = st.text_area("¿Qué materias impartes?", placeholder="Ej: Psicología, Historia...")
+    estilo = st.selectbox("Tono del Asistente", ["Muy Formal", "Colega/Amigable", "Creativo", "Ejecutivo"])
     
     st.divider()
-    st.markdown("### 📂 Carga de Datos")
-    archivo_subido = st.file_uploader("Sube Excel o CSV de alumnos/profesionistas", type=['csv', 'xlsx'])
-    
-    if archivo_subido:
-        st.success("Archivo listo para analizar")
+    archivo = st.file_uploader("Subir base de datos (Excel/CSV)", type=['csv', 'xlsx'])
 
-    st.divider()
-    st.info("Este agente tiene acceso a Google Search y puede crear planeaciones, guiones y analizar bases de datos.")
-
-# --- 3. LÓGICA DEL MOTOR (GEMINI 1.5 FLASH) ---
+# --- 2. MOTOR GEMINI 3 FLASH ---
 if api_key:
     try:
         genai.configure(api_key=api_key)
-        
-        # Configuramos el modelo con herramientas de búsqueda web
+        # Actualizado al modelo de última generación
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
+            model_name='gemini-3-flash',
             tools=[{"google_search_retrieval": {}}]
         )
 
-        # Inicializar historial de chat con personalidad de "Nuevo Empleado"
         if "messages" not in st.session_state:
             st.session_state.messages = []
-            bienvenida = "Hola Paulina, soy OmniAgent_Core, tu nuevo asistente. He activado mis módulos de búsqueda web y análisis de datos. ¿Qué materia o base de datos vamos a trabajar hoy?"
-            st.session_state.messages.append({"role": "assistant", "content": bienvenida})
+            saludo = f"OmniAgent Core v3.0 en línea. Saludos, Paulina. He cargado tu perfil de {estilo}. ¿En qué avanzamos hoy?"
+            st.session_state.messages.append({"role": "assistant", "content": saludo})
 
-        # Mostrar el chat
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        # --- 4. INTERACCIÓN Y EJECUCIÓN ---
-        if prompt := st.chat_input("Escribe una instrucción (ej: 'Busca tendencias de IA en 2026')"):
+        # --- 3. PROCESAMIENTO ---
+        if prompt := st.chat_input("Escribe tu instrucción aquí..."):
             
-            # Preparar contexto si hay un archivo cargado
-            contexto_datos = ""
-            if archivo_subido:
-                try:
-                    df = pd.read_excel(archivo_subido) if archivo_subido.name.endswith('xlsx') else pd.read_csv(archivo_subido)
-                    contexto_datos = f"\n\nDATOS DEL ARCHIVO CARGADO:\n{df.to_string(index=False)}\n\n"
-                except Exception as e:
-                    st.error(f"Error al leer el archivo: {e}")
+            contexto_archivo = ""
+            if archivo:
+                df = pd.read_excel(archivo) if archivo.name.endswith('xlsx') else pd.read_csv(archivo)
+                contexto_archivo = f"\n[DATOS CARGADOS]:\n{df.head(30).to_string(index=False)}\n"
 
-            # Guardar y mostrar mensaje del usuario
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-            # Generar respuesta del Asistente
             with st.chat_message("assistant"):
-                instruccion_sistema = (
-                    "Eres OmniAgent_Core, un asistente académico de élite. "
-                    "Tu tono es de un empleado brillante, proactivo y servicial. "
-                    "Tienes permiso para usar Google Search si la información es reciente o externa. "
-                    "Si hay datos de un archivo, úsalos para responder con precisión."
+                # Instrucciones de personalidad basadas en el perfil del Sidebar
+                personalidad = (
+                    f"Eres OmniAgent_Core, un asistente de élite basado en Gemini 3. "
+                    f"Paulina imparte: {materias}. Tu tono debe ser {estilo}. "
+                    "Usa Google Search para datos del 2026 y analiza los archivos si están presentes."
                 )
                 
-                # Llamada al modelo
-                response = model.generate_content(instruccion_sistema + contexto_datos + prompt)
-                
-                # Mostrar respuesta y guardar
+                response = model.generate_content(personalidad + contexto_archivo + prompt)
                 st.markdown(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
 
     except Exception as e:
-        st.error(f"Ocurrió un error con la API: {e}")
+        st.error(f"Error técnico: {e}. Asegúrate de que tu cuenta tenga acceso a Gemini 3.")
 else:
-    st.warning("⚠️ Por favor, introduce tu API Key en la barra lateral para comenzar.")
-    st.image("https://images.unsplash.com/photo-1434030216411-0b793f4b4173?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80", caption="Listo para trabajar contigo.")
+    st.warning("Introduce la clave para activar la potencia de Gemini 3.")
